@@ -19,7 +19,7 @@ DIRETRIZES TÉCNICAS:
 `;
 
 export async function generateTikzResponse(messages: Message[]): Promise<GenerationResponse> {
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   
   // Basic check for key existence or common "missing" placeholders
   if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "YOUR_API_KEY") {
