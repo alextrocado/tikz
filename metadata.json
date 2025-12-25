@@ -1,5 +1,5 @@
 {
-  "name": "TikZ Math Visualizer AI 2.0",
-  "description": "Uma aplicação inteligente que utiliza Gemini 2.0 para gerar figuras matemáticas de alta qualidade usando LaTeX e TikZ.",
+  "name": "TikZ Visualizer AI 2.0",
+  "description": "Visualizador matemático avançado utilizando Gemini 3 e 2.5 para geração de código TikZ/LaTeX.",
   "requestFramePermissions": []
 }

@@ -1,98 +1,98 @@
 
+// TikZ generation service using @google/genai
 import { GoogleGenAI } from "@google/genai";
 import { Message, GenerationResponse } from "../types";
 
 const SYSTEM_INSTRUCTION = `
-Você é o "TikZ Master AI", um assistente especializado em matemática e LaTeX/TikZ.
+Você é o "TikZ Master Engine 2.0". Sua especialidade absoluta é LaTeX/TikZ e representações gráficas matemáticas.
 
-REGRAS DE RESPOSTA:
-Sua resposta DEVE ser estritamente um objeto JSON válido dentro de um bloco de código markdown:
-\`\`\`json
-{
-  "explanation": "Sua explicação amigável aqui em Português.",
-  "tikzCode": "\\begin{tikzpicture} ... \\end{tikzpicture}"
-}
-\`\`\`
+INSTRUÇÕES DE RESPOSTA:
+1. Gere código TikZ/LaTeX impecável para representações 2D e 3D.
+2. Explique brevemente o funcionamento matemático da figura em Português.
+3. O código TikZ DEVE estar obrigatoriamente dentro de um bloco de código markdown delimitado por \`\`\`latex.
+4. Gere sempre o ambiente completo: \\begin{tikzpicture} ... \\end{tikzpicture}.
 
-REGRAS TIKZ:
+DIRETRIZES TÉCNICAS:
 - Use apenas pacotes compatíveis com TikzJax (tikz, pgfplots).
-- Não inclua \\documentclass ou preâmbulos.
-- Comece com \\begin{tikzpicture} e termine com \\end{tikzpicture}.
+- Para gráficos 3D, use o ambiente 'axis' do pgfplots com 'compat=1.18'.
+- Não use pacotes externos como 'standalone' no código interno; foque apenas no ambiente tikzpicture.
 `;
-
-async function callGeminiModel(modelName: string, contents: any): Promise<GenerationResponse> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // Usamos apenas o prompt de texto para evitar que o SDK tente parsear JSON automaticamente e falhe em erros 403
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: contents,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      temperature: 0.7,
-    },
-  });
-
-  const textOutput = response.text;
-  if (!textOutput) throw new Error("A IA retornou uma resposta vazia.");
-
-  try {
-    // Busca o bloco de código JSON na resposta
-    const jsonMatch = textOutput.match(/```json\s*([\s\S]*?)\s*```/) || textOutput.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Formato de resposta inválido.");
-    
-    const jsonStr = jsonMatch[1] || jsonMatch[0];
-    const data = JSON.parse(jsonStr.trim());
-    
-    return {
-      explanation: data.explanation || "Aqui está sua figura:",
-      tikzCode: data.tikzCode || ""
-    };
-  } catch (e) {
-    console.error("Erro ao parsear resposta:", textOutput);
-    throw new Error("Erro ao processar a resposta da IA. Tente novamente.");
-  }
-}
 
 export async function generateTikzResponse(messages: Message[]): Promise<GenerationResponse> {
   const apiKey = process.env.API_KEY;
   
-  if (!apiKey) {
-    if (typeof window !== 'undefined' && (window as any).aistudio) {
-      (window as any).aistudio.openSelectKey();
-    }
-    throw new Error("Chave de API não configurada.");
+  // Basic check for key existence or common "missing" placeholders
+  if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "YOUR_API_KEY") {
+    throw new Error("ENTITY_NOT_FOUND");
   }
 
+  // Guidelines: Create a new GoogleGenAI instance right before making an API call 
+  // to ensure it uses the most up-to-date API key from the dialog.
+  const ai = new GoogleGenAI({ apiKey });
+  
   const contents = messages.map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content + (msg.tikzCode ? `\n\nCódigo TikZ anterior:\n${msg.tikzCode}` : '') }]
+    parts: [{ text: msg.content }]
   }));
 
-  // Lista de modelos em ordem de preferência/disponibilidade
-  const models = ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-2.5-flash-latest"];
-  let lastError = "";
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp", 
+      contents: contents,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        temperature: 0.1,
+      },
+    });
 
-  for (const model of models) {
-    try {
-      console.log(`Tentando modelo: ${model}`);
-      return await callGeminiModel(model, contents);
-    } catch (error: any) {
-      lastError = error?.message || String(error);
-      console.warn(`Modelo ${model} falhou:`, lastError);
-      
-      // Se o erro for de autenticação grave, não adianta tentar os outros
-      if (lastError.includes("API_KEY_INVALID") || lastError.includes("401")) break;
-      
-      // Continua para o próximo modelo se for erro de cota ou faturamento (403/429)
-      continue;
+    // Access the text property directly (getter)
+    const textOutput = response.text;
+    
+    if (!textOutput) {
+      throw new Error("O Gemini 2.0 retornou uma resposta vazia.");
     }
-  }
 
-  // Se chegou aqui, todos falharam
-  if (lastError.includes("403") || lastError.includes("billing") || lastError.includes("faturamento")) {
-    throw new Error("Sua conta do Google AI Studio requer faturamento ativo ou excedeu os limites. Tente criar uma nova chave de API ou vincular um cartão.");
-  }
+    // Extraction of the TikZ code block
+    const tikzRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/;
+    const match = textOutput.match(tikzRegex);
+    const tikzCode = match ? match[0] : "";
+    
+    const explanation = textOutput.replace(/```[\s\S]*?```/g, "").trim();
 
-  throw new Error("Não foi possível obter resposta dos servidores do Google. Verifique sua conexão e chave de API.");
+    // If there's an explanation but no TikZ code
+    if (!tikzCode && textOutput.trim().length > 0) {
+      return {
+        explanation: textOutput,
+        tikzCode: "",
+      };
+    }
+
+    if (!tikzCode) {
+      throw new Error("Não foi possível extrair um código TikZ válido da resposta.");
+    }
+
+    return {
+      explanation: explanation || "Figura gerada com sucesso:",
+      tikzCode,
+    };
+  } catch (e: any) {
+    console.error("Erro capturado no GeminiService:", e);
+    
+    // The "json" error usually indicates a network/auth issue where an HTML error page is returned.
+    // Mapping this to ENTITY_NOT_FOUND lets App.tsx trigger the key picker.
+    const errorMsg = e.message || String(e);
+
+    if (
+      errorMsg.includes("json") || 
+      errorMsg.includes("Response") || 
+      errorMsg.includes("not found") || 
+      errorMsg.includes("404") ||
+      errorMsg.includes("403") ||
+      errorMsg.includes("API key")
+    ) {
+      throw new Error("ENTITY_NOT_FOUND");
+    }
+
+    throw new Error(`Erro Gemini 2.0: ${errorMsg}`);
+  }
 }
