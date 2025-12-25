@@ -1,6 +1,6 @@
 
 // TikZ generation service using @google/genai
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Message, GenerationResponse } from "../types";
 
 const SYSTEM_INSTRUCTION = `
@@ -28,7 +28,7 @@ export async function generateTikzResponse(messages: Message[]): Promise<Generat
 
   // Guidelines: Create a new GoogleGenAI instance right before making an API call 
   // to ensure it uses the most up-to-date API key from the dialog.
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenerativeAI(apiKey);
   
   const contents = messages.map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
